@@ -49,7 +49,7 @@ export function ListFilters() {
     }
 
     const queryString = params.toString();
-    return queryString ? `/?${queryString}` : "/";
+    return queryString ? `/applications?${queryString}` : "/applications";
   }
 
   function changeQuery(value: string) {

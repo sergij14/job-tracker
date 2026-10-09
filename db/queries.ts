@@ -1,5 +1,5 @@
-import { and, asc, desc, eq, ilike, or, sql } from "drizzle-orm";
-import type { Status } from "@/lib/statuses";
+import { and, asc, count, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { STATUSES, type Status } from "@/lib/statuses";
 import { z } from "zod";
 import { db } from "@/db";
 import { applications, companies } from "@/db/schema";
@@ -13,6 +13,15 @@ const cursorSchema = z.tuple([
 ]);
 
 type Cursor = z.infer<typeof cursorSchema>;
+
+// The columns every application list shows.
+const rowFields = {
+  id: applications.id,
+  position: applications.position,
+  status: applications.status,
+  appliedAt: applications.appliedAt,
+  company: companies.name,
+};
 
 function encodeCursor(cursor: Cursor) {
   return Buffer.from(JSON.stringify(cursor)).toString("base64url");
@@ -54,11 +63,7 @@ export async function getApplicationsPage(
 
   const fetched = await db
     .select({
-      id: applications.id,
-      position: applications.position,
-      status: applications.status,
-      appliedAt: applications.appliedAt,
-      company: companies.name,
+      ...rowFields,
       createdAtText: sql<string>`${applications.createdAt}::text`,
     })
     .from(applications)
@@ -95,4 +100,31 @@ export async function getApplicationsPage(
     nextCursor:
       hasNext && last ? encodeCursor([last.createdAtText, last.id]) : null,
   };
+}
+
+export async function getRecentApplications(userId: number, limit: number) {
+  return db
+    .select(rowFields)
+    .from(applications)
+    .innerJoin(companies, eq(applications.companyId, companies.id))
+    .where(eq(applications.userId, userId))
+    .orderBy(desc(applications.createdAt), desc(applications.id))
+    .limit(limit);
+}
+
+// How many of the user's applications are in each status, including zeros.
+export async function getStatusCounts(userId: number) {
+  const rows = await db
+    .select({ status: applications.status, count: count() })
+    .from(applications)
+    .where(eq(applications.userId, userId))
+    .groupBy(applications.status);
+
+  const counts = Object.fromEntries(
+    STATUSES.map((status) => [status, 0]),
+  ) as Record<Status, number>;
+
+  for (const row of rows) counts[row.status] = row.count;
+
+  return counts;
 }

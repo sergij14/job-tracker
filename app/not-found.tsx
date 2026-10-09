@@ -24,7 +24,7 @@ export default function NotFound() {
           </EmptyDescription>
         </EmptyHeader>
         <EmptyContent>
-          <Link href="/" className={buttonVariants()}>
+          <Link href="/applications" className={buttonVariants()}>
             Back to applications
           </Link>
         </EmptyContent>

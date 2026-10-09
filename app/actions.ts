@@ -49,6 +49,12 @@ function appliedAtPatch(status: Status) {
       };
 }
 
+// The home overview and the full list both show applications.
+function revalidateApplications() {
+  revalidatePath("/");
+  revalidatePath("/applications");
+}
+
 // Matches one application only if it belongs to this user.
 function ownedBy(userId: number, applicationId: number) {
   return and(
@@ -83,8 +89,8 @@ export async function createApplication(
     });
   });
 
-  revalidatePath("/");
-  redirect("/");
+  revalidateApplications();
+  redirect("/applications");
 }
 
 export async function updateApplication(
@@ -117,8 +123,8 @@ export async function updateApplication(
       .where(ownedBy(user.id, applicationId));
   });
 
-  revalidatePath("/");
-  redirect("/");
+  revalidateApplications();
+  redirect("/applications");
 }
 
 export async function updateStatus(id: number, status: string) {
@@ -131,7 +137,7 @@ export async function updateStatus(id: number, status: string) {
     .set({ status: nextStatus, ...appliedAtPatch(nextStatus) })
     .where(ownedBy(user.id, applicationId));
 
-  revalidatePath("/");
+  revalidateApplications();
 }
 
 export async function deleteApplication(id: number) {
@@ -140,5 +146,5 @@ export async function deleteApplication(id: number) {
 
   await db.delete(applications).where(ownedBy(user.id, applicationId));
 
-  revalidatePath("/");
+  revalidateApplications();
 }

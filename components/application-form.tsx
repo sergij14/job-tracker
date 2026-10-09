@@ -129,7 +129,10 @@ export function ApplicationForm({
               {isPending && <Spinner data-icon="inline-start" />}
               {submitLabel}
             </Button>
-            <Link href="/" className={buttonVariants({ variant: "ghost" })}>
+            <Link
+              href="/applications"
+              className={buttonVariants({ variant: "ghost" })}
+            >
               Cancel
             </Link>
           </Field>
