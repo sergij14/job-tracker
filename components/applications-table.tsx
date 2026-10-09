@@ -1,8 +1,48 @@
 "use client";
 
+import { BriefcaseIcon, MoreHorizontalIcon } from "lucide-react";
 import Link from "next/link";
 import { startTransition, useOptimistic, useState } from "react";
+import { toast } from "sonner";
 import { deleteApplication, updateStatus } from "@/app/actions";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { STATUSES, type Status } from "@/lib/statuses";
 
 export type ApplicationRow = {
@@ -42,104 +82,148 @@ export function ApplicationsTable({
   emptyMessage: string;
 }) {
   const [optimisticRows, addOptimistic] = useOptimistic(rows, applyAction);
-  const [error, setError] = useState<string | null>(null);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
 
   function changeStatus(id: number, status: Status) {
-    setError(null);
     startTransition(async () => {
       addOptimistic({ type: "status", id, status });
       try {
         await updateStatus(id, status);
       } catch {
-        setError("Could not update the status. The change was reverted.");
+        toast.error("Could not update the status. The change was reverted.");
       }
     });
   }
 
   function remove(id: number) {
-    if (!confirm("Delete this application?")) return;
-
-    setError(null);
     startTransition(async () => {
       addOptimistic({ type: "delete", id });
       try {
         await deleteApplication(id);
       } catch {
-        setError("Could not delete the application. It was restored.");
+        toast.error("Could not delete the application. It was restored.");
       }
     });
   }
 
   if (optimisticRows.length === 0) {
-    return <p className="text-gray-500">{emptyMessage}</p>;
+    return (
+      <Empty className="border">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <BriefcaseIcon />
+          </EmptyMedia>
+          <EmptyTitle>{emptyMessage}</EmptyTitle>
+        </EmptyHeader>
+      </Empty>
+    );
   }
 
   return (
     <>
-      {error && (
-        <p
-          role="alert"
-          className="mb-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
-        >
-          {error}
-        </p>
-      )}
-
-      <table className="w-full text-left text-sm">
-        <thead className="border-b text-gray-500">
-          <tr>
-            <th className="py-2">Company</th>
-            <th className="py-2">Position</th>
-            <th className="py-2">Status</th>
-            <th className="py-2">Applied</th>
-            <th className="py-2" />
-          </tr>
-        </thead>
-        <tbody>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Company</TableHead>
+            <TableHead>Position</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Applied</TableHead>
+            <TableHead>
+              <span className="sr-only">Actions</span>
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {optimisticRows.map((row) => (
-            <tr
+            <TableRow
               key={row.id}
-              className={`border-b ${row.pending ? "opacity-60" : ""}`}
+              aria-busy={row.pending}
+              className={row.pending ? "opacity-60" : undefined}
             >
-              <td className="py-2">{row.company}</td>
-              <td className="py-2">{row.position}</td>
-              <td className="py-2">
-                <select
+              <TableCell className="font-medium">{row.company}</TableCell>
+              <TableCell>{row.position}</TableCell>
+              <TableCell>
+                <Select
                   value={row.status}
-                  onChange={(event) =>
-                    changeStatus(row.id, event.target.value as Status)
-                  }
-                  className="rounded border px-2 py-1"
+                  onValueChange={(status) => {
+                    if (status) changeStatus(row.id, status);
+                  }}
                 >
-                  {STATUSES.map((status) => (
-                    <option key={status} value={status}>
-                      {status}
-                    </option>
-                  ))}
-                </select>
-              </td>
-              <td className="py-2">{row.appliedAt ?? "-"}</td>
-              <td className="py-2">
-                <div className="flex items-center justify-end gap-4">
-                  <Link
-                    href={`/applications/${row.id}/edit`}
-                    className="text-gray-600"
+                  <SelectTrigger size="sm" aria-label="Status">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STATUSES.map((status) => (
+                      <SelectItem key={status} value={status}>
+                        {status}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </TableCell>
+              <TableCell className="text-muted-foreground">
+                {row.appliedAt ?? "-"}
+              </TableCell>
+              <TableCell className="text-right">
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label="Actions"
+                      />
+                    }
                   >
-                    Edit
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => remove(row.id)}
-                    className="text-red-600"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </td>
-            </tr>
+                    <MoreHorizontalIcon />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      render={<Link href={`/applications/${row.id}/edit`} />}
+                    >
+                      Edit
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      variant="destructive"
+                      onClick={() => setDeleteId(row.id)}
+                    >
+                      Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
+
+      <AlertDialog
+        open={deleteId !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteId(null);
+        }}
+      >
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this application?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {"This can't be undone."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                if (deleteId !== null) remove(deleteId);
+                setDeleteId(null);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
