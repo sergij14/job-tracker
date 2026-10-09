@@ -1,6 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { applications, companies } from "@/db/schema";
+import Link from "next/link";
 
 export default async function HomePage() {
   const rows = await db
@@ -17,7 +18,15 @@ export default async function HomePage() {
 
   return (
     <main className="mx-auto max-w-3xl p-8">
-      <h1 className="mb-6 text-2xl font-semibold">Job applications</h1>
+      <div className="mb-6 flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">Job applications</h1>
+        <Link
+          href="/applications/new"
+          className="rounded bg-black px-4 py-2 text-sm text-white"
+        >
+          Add application
+        </Link>
+      </div>
 
       {rows.length === 0 ? (
         <p className="text-gray-500">No applications yet.</p>
