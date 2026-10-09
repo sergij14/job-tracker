@@ -13,7 +13,7 @@ export const applicationStatus = pgEnum("application_status", STATUSES);
 
 export const companies = pgTable("companies", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  name: text("name").notNull(),
+  name: text("name").notNull().unique(),
   website: text("website"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()

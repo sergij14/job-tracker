@@ -24,20 +24,20 @@ function readForm(formData: FormData) {
   };
 }
 
-async function findOrCreateCompany(name: string) {
-  const [existing] = await db
-    .select({ id: companies.id })
-    .from(companies)
-    .where(eq(companies.name, name))
-    .limit(1);
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-  if (existing) return existing.id;
-
-  const [created] = await db
+// Insert the company, or return the existing one with the same name.
+async function upsertCompany(tx: Tx, name: string) {
+  const [company] = await tx
     .insert(companies)
     .values({ name })
+    .onConflictDoUpdate({
+      target: companies.name,
+      set: { name: sql`excluded.name` },
+    })
     .returning({ id: companies.id });
-  return created.id;
+
+  return company.id;
 }
 
 // Set applied_at to today the first time an application leaves the wishlist.
@@ -70,15 +70,17 @@ export async function createApplication(
   }
 
   const { company, position, url, status } = parsed.data;
-  const companyId = await findOrCreateCompany(company);
+  await db.transaction(async (tx) => {
+    const companyId = await upsertCompany(tx, company);
 
-  await db.insert(applications).values({
-    userId: user.id,
-    companyId,
-    position,
-    status,
-    url: url || null,
-    appliedAt: status === "wishlist" ? null : sql`current_date`,
+    await tx.insert(applications).values({
+      userId: user.id,
+      companyId,
+      position,
+      status,
+      url: url || null,
+      appliedAt: status === "wishlist" ? null : sql`current_date`,
+    });
   });
 
   revalidatePath("/");
@@ -100,18 +102,20 @@ export async function updateApplication(
   }
 
   const { company, position, url, status } = parsed.data;
-  const companyId = await findOrCreateCompany(company);
+  await db.transaction(async (tx) => {
+    const companyId = await upsertCompany(tx, company);
 
-  await db
-    .update(applications)
-    .set({
-      companyId,
-      position,
-      status,
-      url: url || null,
-      ...appliedAtPatch(status),
-    })
-    .where(ownedBy(user.id, applicationId));
+    await tx
+      .update(applications)
+      .set({
+        companyId,
+        position,
+        status,
+        url: url || null,
+        ...appliedAtPatch(status),
+      })
+      .where(ownedBy(user.id, applicationId));
+  });
 
   revalidatePath("/");
   redirect("/");
