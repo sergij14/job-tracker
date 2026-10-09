@@ -1,11 +1,12 @@
 "use server";
 
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/db";
 import { applications, companies } from "@/db/schema";
+import { requireUser } from "@/lib/session";
 import type { Status } from "@/lib/statuses";
 import {
   applicationSchema,
@@ -48,10 +49,19 @@ function appliedAtPatch(status: Status) {
       };
 }
 
+// Matches one application only if it belongs to this user.
+function ownedBy(userId: number, applicationId: number) {
+  return and(
+    eq(applications.id, applicationId),
+    eq(applications.userId, userId),
+  );
+}
+
 export async function createApplication(
   _prevState: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const user = await requireUser();
   const values = readForm(formData);
   const parsed = applicationSchema.safeParse(values);
 
@@ -63,6 +73,7 @@ export async function createApplication(
   const companyId = await findOrCreateCompany(company);
 
   await db.insert(applications).values({
+    userId: user.id,
     companyId,
     position,
     status,
@@ -79,6 +90,7 @@ export async function updateApplication(
   _prevState: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const user = await requireUser();
   const applicationId = idSchema.parse(id);
   const values = readForm(formData);
   const parsed = applicationSchema.safeParse(values);
@@ -99,28 +111,30 @@ export async function updateApplication(
       url: url || null,
       ...appliedAtPatch(status),
     })
-    .where(eq(applications.id, applicationId));
+    .where(ownedBy(user.id, applicationId));
 
   revalidatePath("/");
   redirect("/");
 }
 
 export async function updateStatus(id: number, status: string) {
+  const user = await requireUser();
   const applicationId = idSchema.parse(id);
   const nextStatus = statusSchema.parse(status);
 
   await db
     .update(applications)
     .set({ status: nextStatus, ...appliedAtPatch(nextStatus) })
-    .where(eq(applications.id, applicationId));
+    .where(ownedBy(user.id, applicationId));
 
   revalidatePath("/");
 }
 
 export async function deleteApplication(id: number) {
+  const user = await requireUser();
   const applicationId = idSchema.parse(id);
 
-  await db.delete(applications).where(eq(applications.id, applicationId));
+  await db.delete(applications).where(ownedBy(user.id, applicationId));
 
   revalidatePath("/");
 }

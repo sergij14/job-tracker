@@ -1,9 +1,9 @@
 import { createApplication } from "@/app/actions";
 import { ApplicationForm } from "@/components/application-form";
-import { requireSession } from "@/lib/session";
+import { requireUser } from "@/lib/session";
 
 export default async function NewApplicationPage() {
-  await requireSession();
+  await requireUser();
 
   return (
     <main className="mx-auto max-w-md p-8">

@@ -1,17 +1,17 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { updateApplication } from "@/app/actions";
 import { ApplicationForm } from "@/components/application-form";
 import { db } from "@/db";
 import { applications, companies } from "@/db/schema";
-import { requireSession } from "@/lib/session";
+import { requireUser } from "@/lib/session";
 
 export default async function EditApplicationPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireSession();
+  const user = await requireUser();
 
   const { id } = await params;
   const applicationId = Number(id);
@@ -28,7 +28,9 @@ export default async function EditApplicationPage({
     })
     .from(applications)
     .innerJoin(companies, eq(applications.companyId, companies.id))
-    .where(eq(applications.id, applicationId))
+    .where(
+      and(eq(applications.id, applicationId), eq(applications.userId, user.id)),
+    )
     .limit(1);
 
   if (!row) notFound();

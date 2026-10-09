@@ -1,7 +1,16 @@
 import { db } from "./index";
-import { applications, companies } from "./schema";
+import { applications, companies, users } from "./schema";
 
 async function main() {
+  const email = process.env.SEED_USER_EMAIL;
+  if (!email) throw new Error("Set SEED_USER_EMAIL in .env");
+
+  const [user] = await db
+    .insert(users)
+    .values({ email, name: "Seed user" })
+    .onConflictDoUpdate({ target: users.email, set: { email } })
+    .returning();
+
   // Deleting companies also deletes their applications (cascade).
   await db.delete(companies);
 
@@ -19,13 +28,20 @@ async function main() {
       position: "Senior Frontend Engineer",
       status: "applied",
       appliedAt: "2026-10-01",
+      userId: user.id,
     },
-    { companyId: acme.id, position: "Full-Stack Engineer", status: "wishlist" },
+    {
+      companyId: acme.id,
+      position: "Full-Stack Engineer",
+      status: "wishlist",
+      userId: user.id,
+    },
     {
       companyId: globex.id,
       position: "Product Engineer",
       status: "interview",
       appliedAt: "2026-09-24",
+      userId: user.id,
     },
   ]);
 

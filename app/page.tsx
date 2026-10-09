@@ -4,10 +4,10 @@ import { ApplicationsTable } from "@/components/applications-table";
 import { SignOutButton } from "@/components/auth-buttons";
 import { db } from "@/db";
 import { applications, companies } from "@/db/schema";
-import { requireSession } from "@/lib/session";
+import { requireUser } from "@/lib/session";
 
 export default async function HomePage() {
-  const session = await requireSession();
+  const user = await requireUser();
 
   const rows = await db
     .select({
@@ -19,12 +19,13 @@ export default async function HomePage() {
     })
     .from(applications)
     .innerJoin(companies, eq(applications.companyId, companies.id))
+    .where(eq(applications.userId, user.id))
     .orderBy(desc(applications.createdAt), desc(applications.id));
 
   return (
     <main className="mx-auto max-w-4xl p-8">
       <div className="mb-4 flex items-center justify-end gap-4 text-sm">
-        <span>{session.user.name}</span>
+        <span>{user.name}</span>
         <SignOutButton />
       </div>
 

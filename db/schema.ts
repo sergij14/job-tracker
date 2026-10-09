@@ -1,5 +1,6 @@
 import {
   date,
+  index,
   integer,
   pgEnum,
   pgTable,
@@ -19,17 +20,33 @@ export const companies = pgTable("companies", {
     .defaultNow(),
 });
 
-export const applications = pgTable("applications", {
+export const users = pgTable("users", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  companyId: integer("company_id")
-    .notNull()
-    .references(() => companies.id, { onDelete: "cascade" }),
-  position: text("position").notNull(),
-  status: applicationStatus("status").notNull().default("wishlist"),
-  url: text("url"),
-  notes: text("notes"),
-  appliedAt: date("applied_at"),
+  email: text("email").notNull().unique(),
+  name: text("name").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
 });
+
+export const applications = pgTable(
+  "applications",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    companyId: integer("company_id")
+      .notNull()
+      .references(() => companies.id, { onDelete: "cascade" }),
+    position: text("position").notNull(),
+    status: applicationStatus("status").notNull().default("wishlist"),
+    url: text("url"),
+    notes: text("notes"),
+    appliedAt: date("applied_at"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [index("applications_user_id_idx").on(table.userId)],
+);
