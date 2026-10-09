@@ -1,4 +1,5 @@
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, or, sql } from "drizzle-orm";
+import type { Status } from "@/lib/statuses";
 import { z } from "zod";
 import { db } from "@/db";
 import { applications, companies } from "@/db/schema";
@@ -31,7 +32,7 @@ function decodeCursor(value: string | undefined): Cursor | null {
 
 export async function getApplicationsPage(
   userId: number,
-  params: { after?: string; before?: string },
+  params: { after?: string; before?: string; status?: Status; q?: string },
 ) {
   const after = decodeCursor(params.after);
   const before = after ? null : decodeCursor(params.before);
@@ -42,6 +43,13 @@ export async function getApplicationsPage(
     ? backwards
       ? sql`(${applications.createdAt}, ${applications.id}) > (${cursor[0]}::timestamptz, ${cursor[1]}::int)`
       : sql`(${applications.createdAt}, ${applications.id}) < (${cursor[0]}::timestamptz, ${cursor[1]}::int)`
+    : undefined;
+
+  // Escape LIKE wildcards so the user's text is matched literally.
+  const pattern = params.q ? `%${params.q.replace(/[\\%_]/g, "\\$&")}%` : null;
+
+  const searchCondition = pattern
+    ? or(ilike(applications.position, pattern), ilike(companies.name, pattern))
     : undefined;
 
   const fetched = await db
@@ -55,7 +63,14 @@ export async function getApplicationsPage(
     })
     .from(applications)
     .innerJoin(companies, eq(applications.companyId, companies.id))
-    .where(and(eq(applications.userId, userId), cursorCondition))
+    .where(
+      and(
+        eq(applications.userId, userId),
+        params.status ? eq(applications.status, params.status) : undefined,
+        searchCondition,
+        cursorCondition,
+      ),
+    )
     .orderBy(
       backwards ? asc(applications.createdAt) : desc(applications.createdAt),
       backwards ? asc(applications.id) : desc(applications.id),

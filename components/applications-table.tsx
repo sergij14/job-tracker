@@ -34,7 +34,13 @@ function applyAction(
   }
 }
 
-export function ApplicationsTable({ rows }: { rows: ApplicationRow[] }) {
+export function ApplicationsTable({
+  rows,
+  emptyMessage,
+}: {
+  rows: ApplicationRow[];
+  emptyMessage: string;
+}) {
   const [optimisticRows, addOptimistic] = useOptimistic(rows, applyAction);
   const [error, setError] = useState<string | null>(null);
 
@@ -65,7 +71,7 @@ export function ApplicationsTable({ rows }: { rows: ApplicationRow[] }) {
   }
 
   if (optimisticRows.length === 0) {
-    return <p className="text-gray-500">No applications yet.</p>;
+    return <p className="text-gray-500">{emptyMessage}</p>;
   }
 
   return (
