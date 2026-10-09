@@ -1,9 +1,18 @@
+import { PlusIcon } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 import { ApplicationsTable } from "@/components/applications-table";
-import { SignOutButton } from "@/components/auth-buttons";
+import { UserMenu } from "@/components/auth-buttons";
 import { ListFilters } from "@/components/list-filters";
 import { TableSkeleton } from "@/components/table-skeleton";
+import { buttonVariants } from "@/components/ui/button";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import { getApplicationsPage } from "@/db/queries";
 import { requireUser } from "@/lib/session";
 import type { Status } from "@/lib/statuses";
@@ -48,18 +57,24 @@ async function ApplicationsList({
         }
       />
 
-      <nav className="mt-6 flex justify-between text-sm">
-        {previousCursor ? (
-          <Link href={pageHref({ before: previousCursor })}>← Previous</Link>
-        ) : (
-          <span />
-        )}
-        {nextCursor ? (
-          <Link href={pageHref({ after: nextCursor })}>Next →</Link>
-        ) : (
-          <span />
-        )}
-      </nav>
+      {(previousCursor || nextCursor) && (
+        <Pagination className="mt-6">
+          <PaginationContent>
+            {previousCursor && (
+              <PaginationItem>
+                <PaginationPrevious
+                  href={pageHref({ before: previousCursor })}
+                />
+              </PaginationItem>
+            )}
+            {nextCursor && (
+              <PaginationItem>
+                <PaginationNext href={pageHref({ after: nextCursor })} />
+              </PaginationItem>
+            )}
+          </PaginationContent>
+        </Pagination>
+      )}
     </>
   );
 }
@@ -78,20 +93,16 @@ export default async function HomePage({
   const q = typeof params.q === "string" ? params.q.trim().slice(0, 100) : "";
 
   return (
-    <main className="mx-auto max-w-4xl p-8">
-      <div className="mb-4 flex items-center justify-end gap-4 text-sm">
-        <span>{user.name}</span>
-        <SignOutButton />
-      </div>
-
-      <div className="mb-6 flex items-center justify-between">
+    <main className="mx-auto w-full max-w-4xl p-8">
+      <div className="mb-6 flex items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold">Job applications</h1>
-        <Link
-          href="/applications/new"
-          className="rounded bg-black px-4 py-2 text-sm text-white"
-        >
-          Add application
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/applications/new" className={buttonVariants()}>
+            <PlusIcon data-icon="inline-start" />
+            Add application
+          </Link>
+          <UserMenu name={user.name} />
+        </div>
       </div>
 
       <ListFilters />
