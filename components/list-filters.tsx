@@ -1,5 +1,6 @@
 "use client";
 
+import { SearchIcon } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   useEffect,
@@ -8,6 +9,19 @@ import {
   useState,
   useTransition,
 } from "react";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Spinner } from "@/components/ui/spinner";
 import { STATUSES } from "@/lib/statuses";
 
 export function ListFilters() {
@@ -54,29 +68,38 @@ export function ListFilters() {
   }
 
   return (
-    <div className="mb-4 flex items-center gap-3 text-sm">
-      <input
-        type="search"
-        value={query}
-        onChange={(event) => changeQuery(event.target.value)}
-        placeholder="Search company or position"
-        className="w-64 rounded border px-3 py-2"
-      />
+    <div className="mb-4 flex items-center gap-3">
+      <InputGroup className="w-64">
+        <InputGroupInput
+          type="search"
+          value={query}
+          onChange={(event) => changeQuery(event.target.value)}
+          placeholder="Search company or position"
+          aria-label="Search company or position"
+        />
+        <InputGroupAddon>
+          <SearchIcon />
+        </InputGroupAddon>
+      </InputGroup>
 
-      <select
-        value={status}
-        onChange={(event) => changeStatus(event.target.value)}
-        className="rounded border px-3 py-2"
+      <Select
+        value={status || null}
+        onValueChange={(value) => changeStatus(value ?? "")}
       >
-        <option value="">All statuses</option>
-        {STATUSES.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
+        <SelectTrigger aria-label="Filter by status">
+          <SelectValue placeholder="All statuses" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={null}>All statuses</SelectItem>
+          {STATUSES.map((option) => (
+            <SelectItem key={option} value={option}>
+              {option}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
 
-      {isPending && <span className="text-gray-500">Loading…</span>}
+      {isPending && <Spinner className="text-muted-foreground" />}
     </div>
   );
 }
