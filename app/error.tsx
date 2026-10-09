@@ -1,44 +1,57 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { startTransition, useEffect } from "react";
+import { TriangleAlertIcon } from "lucide-react";
+import { useEffect, useTransition } from "react";
+import { Button } from "@/components/ui/button";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { Spinner } from "@/components/ui/spinner";
 
 export default function ErrorPage({
   error,
-  reset,
+  retry,
 }: {
   error: Error & { digest?: string };
-  reset: () => void;
+  retry: () => void;
 }) {
-  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
     console.error(error);
   }, [error]);
 
-  function retry() {
-    startTransition(() => {
-      router.refresh();
-      reset();
-    });
-  }
-
   return (
-    <main className="mx-auto max-w-md p-8 text-center">
-      <h1 className="mb-2 text-2xl font-semibold">Something went wrong</h1>
-      <p className="mb-6 text-gray-500">
-        {"We couldn't load this page. Please try again."}
-      </p>
-      {error.digest && (
-        <p className="mb-6 text-xs text-gray-400">Reference: {error.digest}</p>
-      )}
-      <button
-        type="button"
-        onClick={retry}
-        className="rounded bg-black px-4 py-2 text-sm text-white"
-      >
-        Try again
-      </button>
+    <main className="mx-auto w-full max-w-md p-8">
+      <Empty>
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <TriangleAlertIcon />
+          </EmptyMedia>
+          <EmptyTitle>Something went wrong</EmptyTitle>
+          <EmptyDescription>
+            {"We couldn't load this page. Please try again."}
+          </EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent>
+          <Button
+            type="button"
+            disabled={isPending}
+            onClick={() => startTransition(() => retry())}
+          >
+            {isPending && <Spinner data-icon="inline-start" />}
+            Try again
+          </Button>
+          {error.digest && (
+            <EmptyDescription>Reference: {error.digest}</EmptyDescription>
+          )}
+        </EmptyContent>
+      </Empty>
     </main>
   );
 }
