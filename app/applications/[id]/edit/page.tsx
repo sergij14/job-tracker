@@ -4,12 +4,15 @@ import { updateApplication } from "@/app/actions";
 import { ApplicationForm } from "@/components/application-form";
 import { db } from "@/db";
 import { applications, companies } from "@/db/schema";
+import { requireSession } from "@/lib/session";
 
 export default async function EditApplicationPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireSession();
+
   const { id } = await params;
   const applicationId = Number(id);
 

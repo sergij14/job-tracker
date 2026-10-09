@@ -1,10 +1,14 @@
 import { desc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { ApplicationsTable } from "@/components/applications-table";
+import { SignOutButton } from "@/components/auth-buttons";
 import { db } from "@/db";
 import { applications, companies } from "@/db/schema";
+import { requireSession } from "@/lib/session";
 
 export default async function HomePage() {
+  const session = await requireSession();
+
   const rows = await db
     .select({
       id: applications.id,
@@ -19,6 +23,11 @@ export default async function HomePage() {
 
   return (
     <main className="mx-auto max-w-4xl p-8">
+      <div className="mb-4 flex items-center justify-end gap-4 text-sm">
+        <span>{session.user.name}</span>
+        <SignOutButton />
+      </div>
+
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Job applications</h1>
         <Link
