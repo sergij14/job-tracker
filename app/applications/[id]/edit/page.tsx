@@ -2,6 +2,13 @@ import { and, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { updateApplication } from "@/app/actions";
 import { ApplicationForm } from "@/components/application-form";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { db } from "@/db";
 import { applications, companies } from "@/db/schema";
 import { requireUser } from "@/lib/session";
@@ -38,18 +45,29 @@ export default async function EditApplicationPage({
   const action = updateApplication.bind(null, row.id);
 
   return (
-    <main className="mx-auto max-w-md p-8">
-      <h1 className="mb-6 text-2xl font-semibold">Edit application</h1>
-      <ApplicationForm
-        action={action}
-        submitLabel="Save changes"
-        initialValues={{
-          company: row.company,
-          position: row.position,
-          url: row.url ?? "",
-          status: row.status,
-        }}
-      />
+    <main className="mx-auto w-full max-w-md p-8">
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            <h1>Edit application</h1>
+          </CardTitle>
+          <CardDescription>
+            Update the details of this application.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ApplicationForm
+            action={action}
+            submitLabel="Save changes"
+            initialValues={{
+              company: row.company,
+              position: row.position,
+              url: row.url ?? "",
+              status: row.status,
+            }}
+          />
+        </CardContent>
+      </Card>
     </main>
   );
 }

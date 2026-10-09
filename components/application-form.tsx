@@ -1,8 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment, useActionState, useRef } from "react";
+import { Fragment, useActionState, useRef, useState } from "react";
 import { PostingAutofill } from "@/components/posting-autofill";
+import { Button, buttonVariants } from "@/components/ui/button";
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+  FieldSeparator,
+} from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Spinner } from "@/components/ui/spinner";
 import { STATUSES } from "@/lib/statuses";
 import type { FormState, FormValues } from "@/lib/validation";
 
@@ -13,13 +30,6 @@ type Props = {
   submitLabel: string;
 };
 
-const inputClass = "rounded border px-3 py-2";
-
-function FieldError({ messages }: { messages?: string[] }) {
-  if (!messages?.length) return null;
-  return <p className="text-sm text-red-600">{messages[0]}</p>;
-}
-
 export function ApplicationForm({
   action,
   initialValues,
@@ -28,6 +38,8 @@ export function ApplicationForm({
 }: Props) {
   const [state, formAction, isPending] = useActionState(action, {});
   const values = state.values ?? initialValues;
+  const errors = state.errors ?? {};
+  const [status, setStatus] = useState(initialValues?.status ?? "wishlist");
 
   const companyRef = useRef<HTMLInputElement>(null);
   const positionRef = useRef<HTMLInputElement>(null);
@@ -35,77 +47,93 @@ export function ApplicationForm({
   return (
     <Fragment>
       {autofill && (
-        <PostingAutofill
-          onExtract={({ company, position }) => {
-            if (companyRef.current) companyRef.current.value = company;
-            if (positionRef.current) positionRef.current.value = position;
-          }}
-        />
+        <Fragment>
+          <PostingAutofill
+            onExtract={({ company, position }) => {
+              if (companyRef.current) companyRef.current.value = company;
+              if (positionRef.current) positionRef.current.value = position;
+            }}
+          />
+          <FieldSeparator className="my-6">or fill in manually</FieldSeparator>
+        </Fragment>
       )}
-      <form action={formAction} className="flex flex-col gap-4">
-        <label className="flex flex-col gap-1 text-sm">
-          Company
-          <input
-            ref={companyRef}
-            name="company"
-            required
-            defaultValue={values?.company}
-            className={inputClass}
-          />
-          <FieldError messages={state.errors?.company} />
-        </label>
+      <form action={formAction}>
+        <FieldGroup>
+          <Field data-invalid={Boolean(errors.company)}>
+            <FieldLabel htmlFor="company">Company</FieldLabel>
+            <Input
+              ref={companyRef}
+              id="company"
+              name="company"
+              required
+              defaultValue={values?.company}
+              aria-invalid={Boolean(errors.company)}
+            />
+            <FieldError>{errors.company?.[0]}</FieldError>
+          </Field>
 
-        <label className="flex flex-col gap-1 text-sm">
-          Position
-          <input
-            ref={positionRef}
-            name="position"
-            required
-            defaultValue={values?.position}
-            className={inputClass}
-          />
-          <FieldError messages={state.errors?.position} />
-        </label>
+          <Field data-invalid={Boolean(errors.position)}>
+            <FieldLabel htmlFor="position">Position</FieldLabel>
+            <Input
+              ref={positionRef}
+              id="position"
+              name="position"
+              required
+              defaultValue={values?.position}
+              aria-invalid={Boolean(errors.position)}
+            />
+            <FieldError>{errors.position?.[0]}</FieldError>
+          </Field>
 
-        <label className="flex flex-col gap-1 text-sm">
-          Job posting URL
-          <input
-            name="url"
-            type="url"
-            defaultValue={values?.url}
-            className={inputClass}
-          />
-          <FieldError messages={state.errors?.url} />
-        </label>
+          <Field data-invalid={Boolean(errors.url)}>
+            <FieldLabel htmlFor="url">Job posting URL</FieldLabel>
+            <Input
+              id="url"
+              name="url"
+              type="url"
+              defaultValue={values?.url}
+              aria-invalid={Boolean(errors.url)}
+            />
+            <FieldError>{errors.url?.[0]}</FieldError>
+          </Field>
 
-        <label className="flex flex-col gap-1 text-sm">
-          Status
-          <select
-            name="status"
-            defaultValue={values?.status ?? "wishlist"}
-            className={inputClass}
-          >
-            {STATUSES.map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
-          </select>
-          <FieldError messages={state.errors?.status} />
-        </label>
+          <Field data-invalid={Boolean(errors.status)}>
+            <FieldLabel htmlFor="status">Status</FieldLabel>
+            <Select
+              name="status"
+              value={status}
+              onValueChange={(value) => {
+                if (value) setStatus(value);
+              }}
+            >
+              <SelectTrigger
+                id="status"
+                className="w-full"
+                aria-invalid={Boolean(errors.status)}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {STATUSES.map((status) => (
+                  <SelectItem key={status} value={status}>
+                    {status}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <FieldError>{errors.status?.[0]}</FieldError>
+          </Field>
 
-        <div className="flex items-center gap-4">
-          <button
-            type="submit"
-            disabled={isPending}
-            className="rounded bg-black px-4 py-2 text-sm text-white disabled:opacity-50"
-          >
-            {isPending ? "Saving…" : submitLabel}
-          </button>
-          <Link href="/" className="text-sm text-gray-500">
-            Cancel
-          </Link>
-        </div>
+          <Field orientation="horizontal">
+            <Button type="submit" disabled={isPending}>
+              {isPending && <Spinner data-icon="inline-start" />}
+              {submitLabel}
+            </Button>
+            <Link href="/" className={buttonVariants({ variant: "ghost" })}>
+              Cancel
+            </Link>
+          </Field>
+        </FieldGroup>
       </form>
     </Fragment>
   );
