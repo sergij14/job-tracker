@@ -1,26 +1,26 @@
-import { desc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { ApplicationsTable } from "@/components/applications-table";
 import { SignOutButton } from "@/components/auth-buttons";
-import { db } from "@/db";
-import { applications, companies } from "@/db/schema";
+import { getApplicationsPage } from "@/db/queries";
 import { requireUser } from "@/lib/session";
 
-export default async function HomePage() {
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
   const user = await requireUser();
 
-  const rows = await db
-    .select({
-      id: applications.id,
-      position: applications.position,
-      status: applications.status,
-      appliedAt: applications.appliedAt,
-      company: companies.name,
-    })
-    .from(applications)
-    .innerJoin(companies, eq(applications.companyId, companies.id))
-    .where(eq(applications.userId, user.id))
-    .orderBy(desc(applications.createdAt), desc(applications.id));
+  const params = await searchParams;
+  const after = typeof params.after === "string" ? params.after : undefined;
+  const before = typeof params.before === "string" ? params.before : undefined;
+
+  const { rows, previousCursor, nextCursor } = await getApplicationsPage(
+    user.id,
+    { after, before },
+  );
 
   return (
     <main className="mx-auto max-w-4xl p-8">
@@ -40,6 +40,19 @@ export default async function HomePage() {
       </div>
 
       <ApplicationsTable rows={rows} />
+
+      <nav className="mt-6 flex justify-between text-sm">
+        {previousCursor ? (
+          <Link href={`/?before=${previousCursor}`}>← Previous</Link>
+        ) : (
+          <span />
+        )}
+        {nextCursor ? (
+          <Link href={`/?after=${nextCursor}`}>Next →</Link>
+        ) : (
+          <span />
+        )}
+      </nav>
     </main>
   );
 }
