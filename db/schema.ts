@@ -50,3 +50,20 @@ export const applications = pgTable(
   },
   (table) => [index("applications_user_id_idx").on(table.userId)],
 );
+
+export const aiUsage = pgTable(
+  "ai_usage",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    feature: text("feature").notNull(),
+    inputTokens: integer("input_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [index("ai_usage_created_at_idx").on(table.createdAt)],
+);
