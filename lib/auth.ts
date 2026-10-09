@@ -8,5 +8,6 @@ export const auth = betterAuth({
       clientSecret: process.env.GITHUB_CLIENT_SECRET as string,
     },
   },
+  onAPIError: { errorURL: "/sign-in" },
   plugins: [nextCookies()],
 });
