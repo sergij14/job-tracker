@@ -1,5 +1,5 @@
 import { db } from "./index";
-import { applications, companies, users } from "./schema";
+import { applicationEvents, applications, companies, users } from "./schema";
 
 async function main() {
   const email = process.env.SEED_USER_EMAIL;
@@ -22,7 +22,9 @@ async function main() {
     ])
     .returning();
 
-  await db.insert(applications).values([
+  const [senior, fullStack, product] = await db
+    .insert(applications)
+    .values([
     {
       companyId: acme.id,
       position: "Senior Frontend Engineer",
@@ -43,9 +45,40 @@ async function main() {
       appliedAt: "2026-09-24",
       userId: user.id,
     },
+    ])
+    .returning({ id: applications.id });
+
+  await db.insert(applicationEvents).values([
+    {
+      applicationId: senior.id,
+      toStatus: "wishlist",
+      createdAt: new Date("2026-09-28T10:00:00Z"),
+    },
+    {
+      applicationId: senior.id,
+      fromStatus: "wishlist",
+      toStatus: "applied",
+      createdAt: new Date("2026-10-01T09:30:00Z"),
+    },
+    {
+      applicationId: fullStack.id,
+      toStatus: "wishlist",
+      createdAt: new Date("2026-10-04T16:00:00Z"),
+    },
+    {
+      applicationId: product.id,
+      toStatus: "applied",
+      createdAt: new Date("2026-09-24T11:00:00Z"),
+    },
+    {
+      applicationId: product.id,
+      fromStatus: "applied",
+      toStatus: "interview",
+      createdAt: new Date("2026-10-02T14:15:00Z"),
+    },
   ]);
 
-  console.log("Seeded 2 companies and 3 applications");
+  console.log("Seeded 2 companies and 3 applications with history");
 }
 
 main()
