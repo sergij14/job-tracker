@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   date,
   index,
@@ -49,6 +50,33 @@ export const applications = pgTable(
       .defaultNow(),
   },
   (table) => [index("applications_user_id_idx").on(table.userId)],
+);
+
+// One row per status an application has been in. `from_status` is null for the
+// row written when the application is created.
+//
+// `created_at` uses clock_timestamp(), not now(): now() is when the transaction
+// started, so a status change that waited on the row lock would be stamped
+// before the change it waited behind, and the timeline would be out of order.
+export const applicationEvents = pgTable(
+  "application_events",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    applicationId: integer("application_id")
+      .notNull()
+      .references(() => applications.id, { onDelete: "cascade" }),
+    fromStatus: applicationStatus("from_status"),
+    toStatus: applicationStatus("to_status").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (table) => [
+    index("application_events_application_id_created_at_idx").on(
+      table.applicationId,
+      table.createdAt,
+    ),
+  ],
 );
 
 export const aiUsage = pgTable(
