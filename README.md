@@ -1,6 +1,6 @@
 # Case Study: Job Tracker - A job application tracker with AI autofill
 
-A full-stack app for tracking job applications from wishlist to offer. Built with Next.js 16 (App Router, Server Actions), React 19, PostgreSQL with Drizzle ORM, better-auth (GitHub sign-in), the Vercel AI SDK with Claude, and shadcn/ui on Base UI.
+A full-stack app for tracking job applications from wishlist to offer, with a status history for every application and pipeline stats built on it. Built with Next.js 16 (App Router, Server Actions), React 19, PostgreSQL with Drizzle ORM, better-auth (GitHub sign-in), the Vercel AI SDK with Claude, and shadcn/ui on Base UI.
 
 ## The Problem
 
@@ -38,13 +38,36 @@ autofill request → BEGIN → take lock → count today's calls (this user + ev
                                           → write token counts onto that row
 ```
 
-Because the slot is reserved before the call and the token counts are written after it, the `ai_usage` table is also a cost log. A call that fails still uses its slot, so retries can't push the total past the cap. The limits are 10 autofills per user and 100 across all users per day, set in `lib/ai-limits.ts`.
+Because the slot is reserved before the call and the token counts are written after it, the `ai_usage` table is also a cost log. A call that fails still uses its slot, so retries can't push the total past the cap. The limits are 10 autofills per user and 100 across all users per day, set in `lib/ai-limits.ts`. An integration test fires the requests concurrently against real Postgres to prove the lock holds (see [Tested against real Postgres](#tested-against-real-postgres)).
 
 ### The job posting is untrusted input
 
 A pasted posting is text from a stranger, and it goes straight into a prompt. The prompt wraps it in `<job_posting>` tags and tells the model to treat it as data and ignore any instructions inside it. The model has to answer in a Zod schema (`isJobPosting`, `company`, `position`) rather than free text, and the answers are cut to the same length limits as the form. Input is capped at 8,000 characters and output at 300 tokens.
 
 The AI never writes to the database. It fills in the form, and the user checks it and saves through the same validated Server Action as a hand-typed entry.
+
+### A status history that can't fork
+
+A status column only says where an application is now. The questions a job search raises are about time: when did I apply, how long until they replied, how many applications got an interview, even the ones that ended in a rejection. So every status an application enters is recorded in `application_events` (`from_status`, `to_status`, `created_at`), in the same transaction as the change itself. Creating an application records its starting status with a null `from_status`.
+
+```
+updateStatus → BEGIN → SELECT status … FOR UPDATE   (lock the row, read the current status)
+                     → UPDATE applications SET status = …
+                     → INSERT application_events (from = old status, to = new status)
+                     → COMMIT
+```
+
+Two details keep the history a single chain under concurrent edits:
+
+- **The row is locked before the old status is read.** Without `FOR UPDATE`, two changes sent together both read the same starting status, and the history forks: `applied → interview` and `applied → rejected`, with no record of how one became the other. With the lock, the second change waits, then reads the status the first one left.
+- **Events are stamped with `clock_timestamp()`, not `now()`.** In Postgres `now()` is the time the *transaction started*. A change that waited on the lock started before the change it waited behind, so it got an earlier timestamp and the timeline came out in the wrong order. The concurrency test caught this. `clock_timestamp()` is the time of the insert, which happens after the lock is taken.
+
+The edit page shows the history as a timeline with the gap between steps ("Applied → Interview · 8 days later"). The home page uses it for two numbers:
+
+- **Interview rate**: the share of sent applications that reached an interview or offer, now or at any point, so a later rejection doesn't erase the interview.
+- **Median time to a reply**: days from `applied_at` to the first move to interview, offer or rejection, computed in one query with `percentile_cont(0.5)`. Applications still waiting are skipped, because `percentile_cont` ignores nulls. Applications created straight into "interview" are skipped too, since they have no measured wait. The first reply is a correlated subquery per application, served by the `(application_id, created_at)` index. Over 10,000 seeded applications the whole query takes about 20 ms.
+
+Applications created before the history existed have no events. The migration doesn't backfill guesses about their past: they count toward the interview rate by their current status and stay out of the median.
 
 ### Ownership enforced in every query
 
@@ -66,12 +89,27 @@ The search text, status filter and page cursor all live in the URL, so a filtere
 
 The Suspense boundary around the table is keyed on the cursor only. Moving to another page shows a skeleton, while changing a filter keeps the current rows on screen with a small spinner until the new ones arrive.
 
+### Tested against real Postgres
+
+The two claims above that matter most are about concurrency, and mocks can't test concurrency. The integration tests in `tests/` run against the docker-compose Postgres, in a separate `job_tracker_test` database that's migrated once per run and truncated between tests. The setup refuses to run against a database whose name doesn't end in `_test`.
+
+| Test | What it fires | What must hold |
+| --- | --- | --- |
+| Per-user quota | 30 reservations for one user at once | Exactly 10 granted, and their `remaining` values are 9…0, each slot handed out once |
+| Global quota | 120 reservations from 12 users at once | Exactly 100 granted |
+| History chain | 4 status changes to one application at once | Each event's `from` is the previous event's `to`, and the last matches the row |
+| Pipeline stats | Hand-written histories | Interview rate and median match a worked example, other users' data excluded |
+
+Each concurrency test was checked by removing the lock it protects and confirming it fails. Without the advisory lock, one user got **14–15 of 10** slots, and all users together got **105–108 of 100**. Without `FOR UPDATE`, the history forked on every run.
+
+To keep this testable, database writes live in `db/mutations.ts`, next to the reads in `db/queries.ts`, and the Server Actions handle auth, validation and revalidation. The quota reservation moved out of the `"use server"` file to `lib/ai-quota.ts`, because every export from that file becomes an endpoint the browser can call.
+
 ### Smaller decisions
 
 - **The applied date is set by the database.** `applied_at` is written as `coalesce(applied_at, current_date)` the first time an application leaves the wishlist, so later status changes never overwrite the original date.
 - **Companies are upserted in one statement.** `ON CONFLICT (name) DO UPDATE … RETURNING id` returns the existing company's id on a conflict, where `DO NOTHING` would return no row and need a second query. The upsert and the application write share one transaction.
 - **Migrations run only on production builds.** Vercel runs `drizzle-kit migrate` before the build only when `VERCEL_ENV` is `production`, so preview deployments never change the production schema.
-- **Realistic test data.** `npm run db:seed:bulk` inserts thousands of applications in a single SQL statement with `generate_series`, for testing pagination and search on a long list.
+- **Realistic test data.** `npm run db:seed:bulk` inserts thousands of applications in a single SQL statement with `generate_series`, for testing pagination and search on a long list. A data-modifying CTE (`WITH inserted AS (INSERT … RETURNING …)`) writes each application's history in the same statement, so the stats have data to work with.
 
 ## Running locally
 
@@ -80,6 +118,7 @@ npm install
 docker compose up -d    # Postgres 18 on localhost:5432
 npm run db:migrate
 npm run dev             # http://localhost:3000
+npm test                # integration tests, against the same Postgres
 ```
 
 Create `.env.local` with:
