@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { updateApplication } from "@/app/actions";
 import { ApplicationForm } from "@/components/application-form";
+import { StatusTimeline } from "@/components/status-timeline";
 import {
   Card,
   CardContent,
@@ -10,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { db } from "@/db";
+import { getApplicationHistory } from "@/db/queries";
 import { applications, companies } from "@/db/schema";
 import { requireUser } from "@/lib/session";
 
@@ -42,10 +44,11 @@ export default async function EditApplicationPage({
 
   if (!row) notFound();
 
+  const history = await getApplicationHistory(user.id, row.id);
   const action = updateApplication.bind(null, row.id);
 
   return (
-    <main className="mx-auto w-full max-w-md p-8">
+    <main className="mx-auto w-full max-w-md space-y-6 p-8">
       <Card>
         <CardHeader>
           <CardTitle>
@@ -66,6 +69,18 @@ export default async function EditApplicationPage({
               status: row.status,
             }}
           />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            <h2>History</h2>
+          </CardTitle>
+          <CardDescription>Every status this application has been in.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <StatusTimeline events={history} />
         </CardContent>
       </Card>
     </main>

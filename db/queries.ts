@@ -1,8 +1,19 @@
-import { and, asc, count, desc, eq, ilike, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  ilike,
+  inArray,
+  isNotNull,
+  or,
+  sql,
+} from "drizzle-orm";
 import { STATUSES, type Status } from "@/lib/statuses";
 import { z } from "zod";
 import { db } from "@/db";
-import { applications, companies } from "@/db/schema";
+import { applicationEvents, applications, companies } from "@/db/schema";
 
 export const PAGE_SIZE = 25;
 
@@ -127,4 +138,75 @@ export async function getStatusCounts(userId: number) {
   for (const row of rows) counts[row.status] = row.count;
 
   return counts;
+}
+
+// Every status the application has been in, oldest first. Joined to
+// applications so the ownership check lives in the same query.
+export async function getApplicationHistory(
+  userId: number,
+  applicationId: number,
+) {
+  return db
+    .select({
+      id: applicationEvents.id,
+      fromStatus: applicationEvents.fromStatus,
+      toStatus: applicationEvents.toStatus,
+      createdAt: applicationEvents.createdAt,
+    })
+    .from(applicationEvents)
+    .innerJoin(applications, eq(applicationEvents.applicationId, applications.id))
+    .where(
+      and(
+        eq(applications.id, applicationId),
+        eq(applications.userId, userId),
+      ),
+    )
+    .orderBy(asc(applicationEvents.createdAt), asc(applicationEvents.id));
+}
+
+const INTERVIEW_STATUSES: Status[] = ["interview", "offer"];
+const RESPONSE_STATUSES: Status[] = ["interview", "offer", "rejected"];
+
+// Of the applications that left the wishlist: how many reached an interview,
+// and the median number of days from applying to the first reply (an
+// interview, offer or rejection).
+export async function getPipelineStats(userId: number) {
+  // An application counts as interviewed if it's in an interview status now or
+  // ever was, so a later rejection doesn't erase the interview. Rows created
+  // before history was recorded only have their current status to go on.
+  const everInterviewed = db
+    .select({ id: applicationEvents.applicationId })
+    .from(applicationEvents)
+    .where(inArray(applicationEvents.toStatus, INTERVIEW_STATUSES));
+
+  // First reply, from history. Creation rows (from_status is null) are
+  // skipped: an application added straight into "interview" has no measured
+  // wait. Correlated per application, so it's an index lookup on
+  // (application_id, created_at), not a scan of everyone's history.
+  const firstResponseAt = sql`(
+    select min(${applicationEvents.createdAt})
+    from ${applicationEvents}
+    where ${applicationEvents.applicationId} = ${applications.id}
+      and ${isNotNull(applicationEvents.fromStatus)}
+      and ${inArray(applicationEvents.toStatus, RESPONSE_STATUSES)}
+  )`;
+
+  const [stats] = await db
+    .select({
+      applied: count(),
+      interviewed: sql<number>`count(*) filter (where ${or(
+        inArray(applications.status, INTERVIEW_STATUSES),
+        inArray(applications.id, everInterviewed),
+      )})`.mapWith(Number),
+      // percentile_cont skips nulls: applications still waiting for a reply.
+      medianDaysToResponse: sql<number | null>`percentile_cont(0.5) within group (
+        order by (${firstResponseAt})::date - ${applications.appliedAt}
+      )`.mapWith((value) => (value === null ? null : Number(value))),
+    })
+    .from(applications)
+    .where(
+      and(eq(applications.userId, userId), isNotNull(applications.appliedAt)),
+    );
+
+  return stats;
 }

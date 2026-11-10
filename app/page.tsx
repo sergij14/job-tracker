@@ -9,18 +9,29 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { getRecentApplications, getStatusCounts } from "@/db/queries";
+import {
+  getPipelineStats,
+  getRecentApplications,
+  getStatusCounts,
+} from "@/db/queries";
 import { requireUser } from "@/lib/session";
 import { STATUSES } from "@/lib/statuses";
 
 const RECENT_LIMIT = 5;
 
+// The median of an even count can land on a half day.
+function formatDays(days: number) {
+  const rounded = Math.round(days * 2) / 2;
+  return `${rounded} ${rounded === 1 ? "day" : "days"}`;
+}
+
 export default async function HomePage() {
   const user = await requireUser();
 
-  const [counts, recent] = await Promise.all([
+  const [counts, recent, pipeline] = await Promise.all([
     getStatusCounts(user.id),
     getRecentApplications(user.id, RECENT_LIMIT),
+    getPipelineStats(user.id),
   ]);
 
   const total = Object.values(counts).reduce((sum, value) => sum + value, 0);
@@ -63,6 +74,44 @@ export default async function HomePage() {
           ))}
         </div>
       </section>
+
+      {pipeline.applied > 0 && (
+        <section aria-labelledby="pipeline" className="mb-8">
+          <h2 id="pipeline" className="sr-only">
+            Pipeline
+          </h2>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Card size="sm">
+              <CardHeader>
+                <CardDescription>Interview rate</CardDescription>
+                <CardTitle className="text-2xl font-semibold tabular-nums">
+                  {Math.round((pipeline.interviewed / pipeline.applied) * 100)}%
+                </CardTitle>
+                <CardDescription>
+                  {pipeline.interviewed} of {pipeline.applied} sent{" "}
+                  {pipeline.applied === 1 ? "application" : "applications"}{" "}
+                  reached an interview
+                </CardDescription>
+              </CardHeader>
+            </Card>
+            <Card size="sm">
+              <CardHeader>
+                <CardDescription>Median time to a reply</CardDescription>
+                <CardTitle className="text-2xl font-semibold tabular-nums">
+                  {pipeline.medianDaysToResponse === null
+                    ? "—"
+                    : formatDays(pipeline.medianDaysToResponse)}
+                </CardTitle>
+                <CardDescription>
+                  {pipeline.medianDaysToResponse === null
+                    ? "No replies recorded yet"
+                    : "From applying to the first interview, offer or rejection"}
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </div>
+        </section>
+      )}
 
       <section aria-labelledby="recent">
         <div className="mb-3 flex items-center justify-between gap-4">
